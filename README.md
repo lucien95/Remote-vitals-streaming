@@ -15,11 +15,3 @@ remote-vitals-streaming/
 │   ├── outputs.tf              # ← ADD THIS
 │   └── rpm-dev.auto.tfvars     # ← Your existing file
 └── docs/
-
-
-Configure secrets in GitHub Settings > Secrets:
-
-GCP_SA_KEY - Service account JSON
-GCP_PROJECT_ID - Your project ID
-
- terraform state bucket: lucien-terraform-state-bucket
