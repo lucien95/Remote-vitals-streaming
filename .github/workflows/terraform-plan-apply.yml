@@ -1,17 +1,12 @@
-# .github/workflows/terraform.yml
-# Single workflow for personal project - Plan on PR, Apply on merge
-
 name: 'Terraform'
 
 on:
-  # Run plan and validate on PRs from feature branches
   pull_request:
     branches: [ main ]
     paths: 
       - 'infra/**'
     types: [opened, synchronize, reopened]
   
-  # Run apply when merged to main
   push:
     branches: [ main ]
     paths:
@@ -39,7 +34,6 @@ jobs:
       with:
         terraform_version: ${{ env.TF_VERSION }}
     
-    # GCP Authentication
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
       with:
@@ -49,7 +43,6 @@ jobs:
     - name: Setup Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
     
-    # Always run these steps
     - name: Terraform Format Check
       id: fmt
       run: terraform fmt -check -recursive
@@ -63,13 +56,11 @@ jobs:
       id: validate
       run: terraform validate -no-color
     
-    # Plan step (runs on both PR and push)
     - name: Terraform Plan
       id: plan
       run: terraform plan -no-color -input=false -out=tfplan
       continue-on-error: true
     
-    # Comment on PR with plan results (only on pull requests)
     - name: Update Pull Request
       uses: actions/github-script@v6
       if: github.event_name == 'pull_request'
@@ -102,12 +93,10 @@ jobs:
             body: output
           })
     
-    # Apply step (only runs on push to main)
     - name: Terraform Apply
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform apply -auto-approve tfplan
     
-    # Show deployment info after apply
     - name: Show Deployment Info
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: |
@@ -115,7 +104,6 @@ jobs:
         echo "Getting deployment details..."
         terraform output
     
-    # Fail job if plan failed (for PRs)
     - name: Terraform Plan Status
       if: steps.plan.outcome == 'failure'
       run: exit 1
