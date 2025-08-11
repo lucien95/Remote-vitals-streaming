@@ -1,0 +1,140 @@
+name: Terraform CI
+'on':
+  pull_request:
+    # target branch (base). Source filtering is handled by the job "if" below
+    branches: [main]
+    paths:
+      - 'infra/**'
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+env:
+  TF_VERSION: '1.5.0'
+  WORKING_DIR: './infra'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Terraform Plan
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Terraform fmt
+        id: fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        id: init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Comment plan to PR
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          WORKING_DIR: ${{ env.WORKING_DIR }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { execSync } = require('child_process');
+            let planText = '';
+            try {
+              planText = execSync('terraform show -no-color tfplan', { cwd: process.env.WORKING_DIR }).toString();
+            } catch (e) { planText = 'Failed to render plan.'; }
+            const body = `## Terraform Plan
+            **fmt:** \`${{ steps.fmt.outcome }}\`
+            **init:** \`${{ steps.init.outcome }}\`
+            **validate:** \`${{ steps.validate.outcome }}\`
+            **plan:** \`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show plan</summary>
+
+            \`\`\`
+            ${planText.substring(0,65000)}
+            \`\`\`
+            </details>`;
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  apply:
+    name: Terraform Apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform plan (confirmation)
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve tfplan
+
+      - name: Show non-sensitive outputs
+        run: |
+          terraform output -json | jq -r '
+            to_entries[] | select(.value.sensitive != true) |
+            "\(.key)=\(.value.value)"
+          ' || true
