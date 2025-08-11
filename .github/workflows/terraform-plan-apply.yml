@@ -6,7 +6,6 @@ on:
     paths: 
       - 'infra/**'
     types: [opened, synchronize, reopened]
-  
   push:
     branches: [ main ]
     paths:
@@ -20,47 +19,37 @@ jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
-    
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
-    
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_version: ${{ env.TF_VERSION }}
-    
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
         project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
     - name: Setup Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
-    
     - name: Terraform Format Check
       id: fmt
       run: terraform fmt -check -recursive
       continue-on-error: true
-    
     - name: Terraform Init
       id: init
       run: terraform init
-    
     - name: Terraform Validate
       id: validate
       run: terraform validate -no-color
-    
     - name: Terraform Plan
       id: plan
       run: terraform plan -no-color -input=false -out=tfplan
       continue-on-error: true
-    
     - name: Update Pull Request
       uses: actions/github-script@v6
       if: github.event_name == 'pull_request'
@@ -92,18 +81,17 @@ jobs:
             repo: context.repo.repo,
             body: output
           })
-    
     - name: Terraform Apply
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform apply -auto-approve tfplan
-    
     - name: Show Deployment Info
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: |
         echo "🎉 Deployment completed!"
         echo "Getting deployment details..."
         terraform output
-    
     - name: Terraform Plan Status
       if: steps.plan.outcome == 'failure'
       run: exit 1
+
+      

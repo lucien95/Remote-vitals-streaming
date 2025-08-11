@@ -16,11 +16,9 @@ jobs:
   terraform-destroy:
     name: 'Terraform Destroy'
     runs-on: ubuntu-latest
-    
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
-    
     steps:
     - name: Validate Destroy Request
       run: |
@@ -29,38 +27,30 @@ jobs:
           exit 1
         fi
         echo "⚠️ Destruction confirmed by ${{ github.actor }}"
-    
     - name: Checkout
       uses: actions/checkout@v4
-    
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_version: ${{ env.TF_VERSION }}
-    
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
         project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
     - name: Terraform Init
       run: terraform init
-    
     - name: Show Destroy Plan
       run: |
         echo "📋 Resources that will be destroyed:"
         terraform plan -destroy -no-color
-    
     - name: Terraform Destroy
       run: |
         echo "💥 Destroying infrastructure..."
         terraform destroy -auto-approve
         echo "✅ Infrastructure destroyed successfully"
-    
     - name: Confirmation
       run: |
         echo "🎯 Destruction completed by ${{ github.actor }}"
         echo "Timestamp: $(date)"
-
-        ## commited
+        
