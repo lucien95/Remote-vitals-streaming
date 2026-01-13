@@ -1,17 +1,30 @@
-# Remote-vitals-streaming
-Remote Patient Monitoring Pipeline!
+# Remote Vitals Streaming
 
+Real-time Remote Patient Monitoring (RPM) pipeline on Google Cloud Platform.
 
-remote-vitals-streaming/
-├── .github/workflows/          # ← CREATE THESE
-│   ├── terraform-plan.yml      # ← Runs on PRs
-│   ├── terraform-apply.yml     # ← Runs on main branch
-│   ├── terraform-validate.yml  # ← Validation & security
-│   └── terraform-destroy.yml   # ← Manual cleanup
-├── infra/                      # ← Your existing folder
-│   ├── main.tf                 # ← Your existing file
-│   ├── variables.tf            # ← Your existing file  
-│   ├── versions.tf             # ← Update with backend config
-│   ├── outputs.tf              # ← ADD THIS
-│   └── rpm-dev.auto.tfvars     # ← Your existing file
-└── docs/
+## Architecture
+
+```
+infra/              # Terraform infrastructure
+.github/workflows/  # CI/CD pipelines
+```
+
+## Getting Started
+
+### Prerequisites
+- Google Cloud account with billing enabled
+- Terraform >= 1.5.0
+- `gcloud` CLI authenticated
+
+### Deploy Infrastructure
+```bash
+cd infra
+terraform init
+terraform plan
+terraform apply
+```
+
+## CI/CD
+
+- **Pull requests** (from `feature/*` branches): Runs `terraform plan` and comments results
+- **Push to main**: Applies infrastructure changes (requires environment approval)
