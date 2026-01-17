@@ -1,0 +1,72 @@
+name: App Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/vitals-processor/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/vitals-processor/**'
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  FUNCTION_NAME: vitals-processor-dev
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./app/vitals-processor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: |
+          python -c "import main; print('Import check passed')"
+
+  deploy:
+    name: Deploy Cloud Function
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Deploy Function
+        run: |
+          gcloud functions deploy ${{ env.FUNCTION_NAME }} \
+            --gen2 \
+            --region=${{ env.REGION }} \
+            --runtime=python311 \
+            --source=./app/vitals-processor \
+            --entry-point=process_vitals \
+            --trigger-http \
+            --allow-unauthenticated=false \
+            --service-account=vitals-processor-dev@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars="FHIR_STORE_PATH=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/datasets/vitals-dev/fhirStores/observations,PROJECT_ID=${{ env.PROJECT_ID }}"
