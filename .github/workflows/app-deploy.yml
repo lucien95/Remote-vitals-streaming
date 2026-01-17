@@ -67,6 +67,6 @@ jobs:
             --source=./app/vitals-processor \
             --entry-point=process_vitals \
             --trigger-http \
-            --allow-unauthenticated=false \
+            --no-allow-unauthenticated \
             --service-account=vitals-processor-dev@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="FHIR_STORE_PATH=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/datasets/vitals-dev/fhirStores/observations,PROJECT_ID=${{ env.PROJECT_ID }}"
