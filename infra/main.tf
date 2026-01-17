@@ -13,7 +13,7 @@ resource "google_healthcare_fhir_store" "observations" {
   version = "R4"
 
   enable_update_create          = true
-  disable_referential_integrity = false
+  disable_referential_integrity = true  # Allow observations without existing patients (demo mode)
 
   notification_configs {
     pubsub_topic = google_pubsub_topic.fhir_notifications.id
