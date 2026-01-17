@@ -2,18 +2,23 @@ import base64
 import json
 import os
 import functions_framework
-from googleapiclient import discovery
-from google.auth import default
+import google.auth
+import google.auth.transport.requests
+import requests as http_requests
 
 
 FHIR_STORE_PATH = os.environ.get("FHIR_STORE_PATH")
 PROJECT_ID = os.environ.get("PROJECT_ID")
+HEALTHCARE_API_URL = "https://healthcare.googleapis.com/v1"
 
 
-def get_healthcare_client():
-    """Get authenticated Healthcare API client."""
-    credentials, _ = default()
-    return discovery.build("healthcare", "v1", credentials=credentials)
+def get_access_token():
+    """Get access token for Healthcare API."""
+    credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-healthcare"]
+    )
+    credentials.refresh(google.auth.transport.requests.Request())
+    return credentials.token
 
 
 @functions_framework.http
@@ -37,7 +42,8 @@ def process_vitals(request):
 
     try:
         observation = create_fhir_observation(vitals)
-        store_observation(observation)
+        result = store_observation(observation)
+        print(f"Created Observation: {result.get('id')}")
         return ("OK", 200)
     except Exception as e:
         print(f"Error processing vitals: {e}")
@@ -122,17 +128,19 @@ def get_vital_code(vital_type: str) -> dict:
     })
 
 
-def store_observation(observation: dict) -> None:
-    """Store FHIR Observation in Healthcare API."""
+def store_observation(observation: dict) -> dict:
+    """Store FHIR Observation in Healthcare API using REST."""
 
-    client = get_healthcare_client()
+    access_token = get_access_token()
 
-    # parent should be the FHIR store path without /fhir suffix
-    request = client.projects().locations().datasets().fhirStores().fhir().create(
-        parent=FHIR_STORE_PATH,
-        type="Observation",
-        body=observation
-    )
+    url = f"{HEALTHCARE_API_URL}/{FHIR_STORE_PATH}/fhir/Observation"
 
-    response = request.execute()
-    print(f"Created Observation: {response.get('id')}")
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/fhir+json"
+    }
+
+    response = http_requests.post(url, headers=headers, json=observation)
+    response.raise_for_status()
+
+    return response.json()
