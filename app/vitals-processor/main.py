@@ -127,10 +127,9 @@ def store_observation(observation: dict) -> None:
 
     client = get_healthcare_client()
 
-    fhir_store_parent = f"{FHIR_STORE_PATH}/fhir"
-
+    # parent should be the FHIR store path without /fhir suffix
     request = client.projects().locations().datasets().fhirStores().fhir().create(
-        parent=fhir_store_parent,
+        parent=FHIR_STORE_PATH,
         type="Observation",
         body=observation
     )
