@@ -28,3 +28,4 @@ Thumbs.db
 *.json
 !package.json
 terraform-ci-key.json
+CLAUDE.md
