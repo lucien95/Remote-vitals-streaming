@@ -12,33 +12,9 @@ Healthcare providers need to monitor patients remotely in real-time. Vital signs
 
 This project solves this by building a serverless, scalable pipeline that can handle thousands of vital sign readings per second.
 
-## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DATA FLOW                                       │
-│                                                                              │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌─────────┐│
-│  │   Devices/   │     │   Pub/Sub    │     │    Cloud     │     │  FHIR   ││
-│  │  Simulator   │────▶│    Topic     │────▶│   Function   │────▶│  Store  ││
-│  │              │     │              │     │              │     │         ││
-│  └──────────────┘     └──────────────┘     └──────────────┘     └─────────┘│
-│                                                                              │
-│       Vitals              Message              Process &           Store as  │
-│      Generator             Queue              Transform             FHIR     │
-│                                                                   Observation│
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CI/CD PIPELINES                                 │
-│                                                                              │
-│  GitHub Repository                                                           │
-│        │                                                                     │
-│        ├── Push to main (infra/)  ──▶  terraform.yml  ──▶  Deploy Infra     │
-│        │                                                                     │
-│        └── Push to main (app/)    ──▶  app-deploy.yml ──▶  Deploy Function  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+##Architecture                                                       
+![Remote Vitals Streaming Architecture](docs/images/rpm-vitals-architecture.png) 
 ```
 
 ## Tech Stack
