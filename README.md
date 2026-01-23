@@ -13,9 +13,8 @@ Healthcare providers need to monitor patients remotely in real-time. Vital signs
 This project solves this by building a serverless, scalable pipeline that can handle thousands of vital sign readings per second.
 
 
-##Architecture                                                       
-![Remote Vitals Streaming Architecture](docs/images/rpm-vitals-architecture.png) 
-```
+## Architecture
+![Remote Vitals Streaming Architecture](docs/images/rpm-vitals-architecture.png)
 
 ## Tech Stack
 
@@ -27,6 +26,8 @@ This project solves this by building a serverless, scalable pipeline that can ha
 | **Data Store** | Cloud Healthcare API (FHIR) | Healthcare-compliant data storage |
 | **CI/CD** | GitHub Actions | Automated deployment pipelines |
 | **State Management** | GCS Backend | Remote Terraform state storage |
+| **Authentication** | Workload Identity Federation | Keyless auth (no stored secrets) |
+| **Security Scanning** | Checkov | Infrastructure security analysis |
 
 ## Project Structure
 
@@ -50,7 +51,8 @@ Remote-vitals-streaming/
 │   ├── terraform.tfvars       # Variable values
 │   ├── provider.tf            # GCP provider config
 │   ├── backend.tf             # Remote state config
-│   └── output.tf              # Output values
+│   ├── output.tf              # Output values
+│   └── workload-identity.tf   # Keyless auth configuration
 ├── .gitignore
 ├── CLAUDE.md                  # AI assistant instructions
 └── README.md                  # This file
@@ -67,6 +69,8 @@ Remote-vitals-streaming/
 | Cloud Function | `vitals-processor-dev` | Processes vitals, writes to FHIR |
 | Storage Bucket | `kloudwithlucien-functions-dev` | Stores function source code |
 | Service Accounts | `vitals-processor-dev`, `function-invoker-dev` | IAM identities |
+| Workload Identity Pool | `github-pool` | Enables keyless GitHub Actions auth |
+| Workload Identity Provider | `github-provider` | OIDC provider for GitHub |
 
 ## Prerequisites
 
@@ -122,20 +126,45 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member=$SA --role=roles
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member=$SA --role=roles/iam.serviceAccountAdmin
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member=$SA --role=roles/storage.admin
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member=$SA --role=roles/run.admin
-
-# Create and download key
-gcloud iam service-accounts keys create ~/terraform-ci-key.json \
-  --iam-account=terraform-ci@YOUR_PROJECT_ID.iam.gserviceaccount.com
 ```
 
-### 4. Configure GitHub Secrets
+### 4. Set Up Workload Identity Federation (Keyless Auth)
 
-Add these secrets to your GitHub repository (Settings → Secrets → Actions):
+Instead of storing service account keys as secrets (security risk), we use **Workload Identity Federation** for keyless authentication:
 
-| Secret | Value |
-|--------|-------|
-| `GCP_SA_KEY` | Contents of `terraform-ci-key.json` |
-| `GCP_PROJECT_ID` | Your GCP project ID |
+```bash
+# Create Workload Identity Pool
+gcloud iam workload-identity-pools create "github-pool" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# Create OIDC Provider for GitHub
+gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+  --location="global" \
+  --workload-identity-pool="github-pool" \
+  --display-name="GitHub Provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository == 'YOUR_GITHUB_USERNAME/YOUR_REPO_NAME'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# Allow GitHub to impersonate the service account
+gcloud iam service-accounts add-iam-policy-binding terraform-ci@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"
+```
+
+**Why Workload Identity Federation?**
+
+| Service Account Keys (Old Way) | Workload Identity (New Way) |
+|-------------------------------|----------------------------|
+| Long-lived credentials | Short-lived tokens (1 hour) |
+| Can be leaked/stolen | No secrets to leak |
+| Manual rotation required | Automatic token refresh |
+| Stored in GitHub Secrets | No storage needed |
+
+### 5. No GitHub Secrets Required for GCP Auth
+
+With Workload Identity Federation, you **don't need** to store `GCP_SA_KEY` in GitHub Secrets. The workflow authenticates automatically via OIDC.
 
 ### 5. Create Terraform State Bucket
 
@@ -303,9 +332,11 @@ For light testing/development:
 - **Healthcare Compliance:** FHIR R4 standard for interoperability
 
 ### Security
+- **Keyless Authentication:** Workload Identity Federation - no stored credentials
 - **Least Privilege:** Service accounts with minimal required permissions
-- **No Secrets in Code:** Credentials stored in GitHub Secrets
+- **Security Scanning:** Checkov scans Terraform for misconfigurations before deploy
 - **Private Endpoints:** Cloud Function requires authentication
+- **Short-lived Tokens:** OIDC tokens expire in 1 hour (vs permanent keys)
 
 ## Troubleshooting
 
@@ -337,9 +368,16 @@ When discussing this project in interviews, highlight:
 
 4. **CI/CD Strategy:** "I implemented separate pipelines for infrastructure and application code, so changes deploy independently without affecting each other."
 
-5. **Security Considerations:** "I used service accounts with minimal permissions, stored secrets in GitHub Secrets, and ensured the Cloud Function requires authentication."
+5. **Security Evolution:** "I initially used service account keys, then realized the security risk. I migrated to Workload Identity Federation for keyless authentication - no secrets to leak, tokens expire in 1 hour, and it follows Google's security best practices."
 
-6. **Cost Optimization:** "The serverless architecture means we only pay for actual usage, and I leveraged free tiers for development."
+6. **DevSecOps:** "I integrated Checkov security scanning into the pipeline. Every Terraform change is scanned for misconfigurations before deployment."
+
+7. **Cost Optimization:** "The serverless architecture means we only pay for actual usage, and I leveraged free tiers for development."
+
+## Completed Enhancements
+
+- [x] Workload Identity Federation (keyless authentication)
+- [x] Checkov security scanning in CI/CD pipeline
 
 ## Future Enhancements
 
